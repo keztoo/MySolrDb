@@ -9,12 +9,11 @@
 ## (2) drop database
 ## (3) create table
 ## (4) drop table
-## (5) fetchall
-## (6) fetchone
-## (7) disconnect
-## (8) commit
-## (9) insert (in cursor.execute())
-## (10) update (in cursor.exsecute())
+## (5) fetchone
+## (6) disconnect
+## (7) commit
+## (8) insert (in cursor.execute())
+## (9) update (in cursor.exsecute())
 ##
 
 from MySolrDbParse import parseWhereClause
@@ -27,8 +26,8 @@ class MySolrDb():
         pass
 
     def connect(self, **kwargs):
-        self.ip_address = 'localhost'
-        self.port = 8983
+        self.ip_address = kwargs.get('ip_address','localhost')
+        self.port = kwargs.get('port', 8983)
         return self
 
     def cursor(self, **kwargs):
@@ -133,10 +132,11 @@ class MySolrDbCursor():
 
 
 
-
+# assuming we have a solr index with a cat field and some docs
+# that have electronics in that field then the following should work ...
 db = MySolrDb()
-db.connect()
-## TODO: Waaa - I want db = MySolrDb.connect() like the big boys
+db.connect(ip_address='localhost', port=8983)
+## TODO: Waaa - I want db = MySolrDb.connect() like the big boys. sergey, where r u when i need u?
 cursor = db.cursor()
 sql_statement = "select * from joe WHERE cat = 'electronics'"
 res = cursor.execute(sql_statement)
