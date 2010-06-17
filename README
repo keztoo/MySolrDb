@@ -10,7 +10,6 @@ This directory contains files associated with the MySolrDb project.
 MySolrDb is a drop-in replacement for MySqlDb which utilizes solr
 as the underlying storage engine. 
 
-
 Manifest
 ========
 MySolrConnect.py - Minimal Solr Connection Library
