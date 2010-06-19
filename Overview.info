@@ -1,0 +1,35 @@
+Here are our various docs ....
+
+
+Here is how a database is represented 
+<id=unique across instance>
+<database_type={database}>
+<database_created_by=user_name>
+<database_date=timestamp>
+<database_table_name='some table name'> # note - array field
+
+
+Here is how a table is represented 
+<id=unique across instance>
+<table_type={table}>
+<table_name=database_table_name>
+<table_created_by=user_name>
+<table_created_date=timestamp>
+
+
+Here is how a column is represented 
+<id=unique across instance>
+<column_type={column}>
+<column_name=database_name_table_name_table_name_column_name>
+# we have a field of each type statically 
+# defined with only 1 populated  for any column
+<column_type={string, int, float, timestamp}>
+<column_value_string=some_string_val>
+<column_value_int=some_int_val>
+<column_value_float=float_val>
+<column_value_timestamp=timestamp>
+
+Note - an auto inc field though supported is an expensive proposition ...
+Must first select the highest id and then add one to it. Only expensive
+on inserts actually. 
+
