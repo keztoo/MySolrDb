@@ -87,11 +87,11 @@ class MySolrDbCursor():
 
     def processUpdate(self, statement):
         # currently only the following formats are supported ...
-        # UPDATE table_name SET age='22' WHERE age='21
+        # UPDATE table_name SET age='22' WHERE some condition
         # or
         # UPDATE table_name SET age='22', year=17, bla='bla' WHERE some condition
 
-        # we always require a table name
+        # we always require a table name which is followed by 'set'
         tindx = statement.lower().find('set')
         if tindx == -1:
             raise Exception, 'MySolrDb.InvalidStatement - 001'
@@ -116,6 +116,9 @@ class MySolrDbCursor():
             val = name_val_array[1].strip()
             update_fields[name] = val
 
+        # at this point, update_fields is a dict of fields/values which need to
+        # be updated for each doc which meets the where_clause critera
+
         #################
         ## FIX THIS!!! ##
         #################
@@ -130,28 +133,50 @@ class MySolrDbCursor():
             where_result = table_index_field + ":[0 TO *]"
         else:
             where_portion = statement[windx:]
-
-            # else we use standard where clause parser
             where_clause = where_portion.strip()[len('where'):].strip()
+            # else we use our standard where clause parser
             where_result = self.handleWhereClause(where_clause)
 
         # we produce a solr statement to get affected docs
         solr_statement = "fl=*" + "&q=" + where_result
 
-        # we query the solr index 
+        # we query the solr index and stick the result in temporary_result_set
         solr_host = self.ip_address + ":" + str(self.port) 
         solr_statement = "start=0&rows=9999&" + solr_statement
         temporary_result_set = solr_request(solr_host, solr_statement)
 
         # next we apply the user changes to this set of documents
+        # and produce a solr style xml doc which represents a transaction
+        update_transaction = "<add>"
         for result in temporary_result_set:
             for field in update_fields:
                 result[field] = update_fields[field]
             # and we also must update the solr index ...
-            ret_code = solr_add(solr_host, solr_statement)
+            # note - for transactional integrity we really should'nt
+            # update individually but rather we create a
+            # master update which we finish with a commit below
+            #ret_code = solr_add(solr_host, result)
+            update_transaction += self.convertDictToDoc(result)
+        update_transaction += "</add><commit/>"
 
+        # finally we update our solr index
 
+        # and return the update status from the solr response
         return 0
+
+
+    def convertDictToDoc(self, dict):
+        # convert a dict to a string of solr name/value entries
+        # only real work to be done is to handle array fields
+        doc = "<doc>"
+        for key in dict:
+            if isinstance(dict[key], list):
+                for k in dict[key]:
+                    doc += "<field name='%s'>%s</field>" % (key, k)
+            else:
+                doc += "<field name='%s'>%s</field>" % (key, dict[key])
+        doc += "</doc>"
+        return doc
 
 
     def processSelect(self, statement):
@@ -172,7 +197,6 @@ class MySolrDbCursor():
         # NOTE: for now since we dont support joins we assume 1 table
         # and oh, btw we currently don't support aliasing
         table_name = table_portion.strip()[len('from'):].strip()
-        #print "Table Name --->", table_name
 
         # for the select portion we knmow that ultimately
         # field names must be separated by a comma.
@@ -216,12 +240,10 @@ cursor = db.cursor()
 sql_statement = "select * from joe WHERE cat = 'electronics'"
 res = cursor.execute(sql_statement)
 rows = cursor.fetchall()
-
 '''
 print "rows for ", sql_statement, "is --->", rows
 for row in rows:
     print row
- 
 '''
 
 sql_statement = "update joe set popularity = 3, manu='joe blow' WHERE cat = 'electronics'"
@@ -231,7 +253,6 @@ rows = cursor.fetchall()
 print "rows for ", sql_statement, "is --->", rows
 for row in rows:
     print "\nROW:", row
-
 '''
 
 
