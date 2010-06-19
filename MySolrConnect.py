@@ -109,11 +109,14 @@ def solr_add(which_index, DATA):
     """
     Add a document to index
     """
-    host_name = solr_indices[which_index][7:]
+    # req_url is ip:port
+    start = time.time()
 
-    # note this really sucks but i'll refactor it later
-    port_start = host_name.find(":")
-    port = host_name[port_start:]
+    req_url = "http://" + req_url + "/solr/select"
+    req_str = "?version=2.2&qt=standard&wt=json&indent=off&" + req_str
+
+    print "req_url --->", req_url
+    print "req_str --->", req_str
 
     for index in WRITE_INDICES:
         host_name = index + port
