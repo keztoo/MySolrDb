@@ -105,7 +105,45 @@ def solr_request(req_url, req_str):
     return docs
 
 
-def solr_add(which_index, DATA):
+
+def solr_add(req_url, DATA):
+    # req_url is ip:port
+    start = time.time()
+
+    host_name = req_url
+    if DEBUG_WRITES:
+        print >> sys.stderr , "\nAttempting to Update Host", host_name
+
+    error_flag = False
+    try:
+        con = HTTPConnection(host_name)
+        con.putrequest('POST', '/solr/update/')
+        con.putheader('content-length', str(len(DATA)))
+        con.putheader('content-type', 'text/xml; charset=UTF-8')
+        con.endheaders()
+        con.send(DATA)
+        r = con.getresponse()
+    except Exception , ex:
+        error_flag = True
+        print >> sys.stderr , "solr_add Error - can not connect to update host", host_name
+        if DEBUG_WRITES:
+            print >> sys.stderr , "Exception, Host at ", host_name, "is not responding (probably a communication problem or the index is not started). must append to the ", which_index, "index for host", host_name, "the following xml --->", DATA
+    else:
+        # no httplib exception. we have a response 
+        if str(r.status) != '200':
+            error_flag = True
+            print >> sys.stderr , "solr_add %s unexpected response from %s: %s %s %s" % (datetime.now(), host_name, r.status, r.msg, r.reason)
+            if DEBUG_WRITES:
+                print >> sys.stderr , "Exception, Host at ", host_name, "is not accepting the update (probably an index schema error). must append to the ", which_index, "index for host", host_name, "the following xml --->", DATA 
+
+    # NOTE: this will only return -1 if the most recent write attempt failed
+    if error_flag:
+        return -1 
+    return 0
+
+
+
+def old_solr_add(which_index, DATA):
     """
     Add a document to index
     """
@@ -169,6 +207,10 @@ def solr_add(which_index, DATA):
     if error_flag:
         return -1 
     return 0
+
+
+
+
 
 
 def solr_commit(which_index):

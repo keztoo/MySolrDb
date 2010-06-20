@@ -13,7 +13,6 @@
 ## (6) disconnect
 ## (7) commit
 ## (8) insert (in cursor.execute())
-## (9) update (in cursor.exsecute())
 ##
 
 from MySolrDbParse import parseWhereClause
@@ -64,7 +63,7 @@ class MySolrDbCursor():
         ## process insert statements here ...    ##
         ###########################################
         elif sa[0].lower().strip() == 'insert':
-            print "insert"
+            return self.processInsert(statement)
 
         #########################################
         ## process update statements here ...  ##
@@ -83,6 +82,13 @@ class MySolrDbCursor():
 
     def handleWhereClause(self, where_clause):
         return parseWhereClause(where_clause)
+
+
+    def processInsert(self, statement):
+        # currently only the following formats are supported ...
+        # INSERT INTO tablename (field1, field2) VALUES (field1_val, field2_val)
+        # insert has the additional problem of having to support auto-increment fields
+        pass
 
 
     def processUpdate(self, statement):
@@ -160,6 +166,8 @@ class MySolrDbCursor():
         update_transaction += "</add><commit/>"
 
         # finally we update our solr index
+        res = solr_add(self.ip_address+":"+str(self.port), update_transaction)
+        print "res --->", res
 
         # and return the update status from the solr response
         return 0
