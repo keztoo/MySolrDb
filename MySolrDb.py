@@ -12,11 +12,12 @@
 ## (5) fetchone
 ## (6) disconnect
 ## (7) commit
-## (8) insert (in cursor.execute())
+## (8) delete
 ##
 
 from MySolrDbParse import parseWhereClause
 from MySolrConnect import solr_request, solr_add
+
 
 class MySolrDb():
     def __init__(self, **kwargs):
@@ -27,6 +28,7 @@ class MySolrDb():
     def connect(self, **kwargs):
         self.ip_address = kwargs.get('ip_address','localhost')
         self.port = kwargs.get('port', 8983)
+        # TODO: we should probably pull in all tables here and save them 
         return self
 
     def cursor(self, **kwargs):
@@ -44,7 +46,7 @@ class MySolrDbCursor():
         return self.last_result
 
     def execute(self, statement):
-        # for now we only support select, insert, update
+        # for now we only support select, insert, update, delete
         # will deal with joins later (maybe)
         if statement is None:
             return statement
@@ -71,6 +73,12 @@ class MySolrDbCursor():
         elif sa[0].lower().strip() == 'update':
             return self.processUpdate(statement)
 
+        #########################################
+        ## process delete statements here ...  ##
+        #########################################
+        elif sa[0].lower().strip() == 'delete':
+            return self.processDelete(statement)
+
         ############################################################
         ## else we have an unsupported format on our hands ...    ##
         ############################################################
@@ -84,11 +92,60 @@ class MySolrDbCursor():
         return parseWhereClause(where_clause)
 
 
+    def processDelete(self, statement):
+        pass
+
+
     def processInsert(self, statement):
         # currently only the following formats are supported ...
         # INSERT INTO tablename (field1, field2) VALUES (field1_val, field2_val)
         # insert has the additional problem of having to support auto-increment fields
-        pass
+
+        iindx = statement.lower().find('into')
+        if iindx == -1:
+            raise Exception, 'MySolrDb.InvalidStatement - 001'
+
+        # we always require a table name which is followed by '('
+        tindx = statement.lower().find('(')
+        if tindx == -1:
+            raise Exception, 'MySolrDb.InvalidStatement - 001'
+
+        table_name = statement[len('insert into'):tindx].strip()
+
+        # next we extract the field names TODO: validate them
+        fn_start = tindx + 1
+        fn_end = statement.find(")")
+        if fn_end == -1:
+            raise Exception, 'MySolrDb.InvalidStatement - 001'
+
+        fields = statement[fn_start:fn_end]
+
+        # we next want our values
+        vals_start = statement.find("(", fn_end)
+        if vals_start == -1:
+            raise Exception, 'MySolrDb.InvalidStatement - 001'
+
+        vals_end = statement.find(")", vals_start)
+        if vals_end == -1:
+            raise Exception, 'MySolrDb.InvalidStatement - 001'
+
+        vals = statement[vals_start+1:vals_end]
+
+        fields_array = fields.split(",")
+        vals_array = vals.split(",")
+
+        insert_transaction = "<add><doc>"
+        indx = 0
+        # TODO: handle array fields
+        while indx < len(fields_array):
+            insert_transaction += "<field name='%s'>%s</field>" % (fields_array[indx].strip(), vals_array[indx].strip())
+            indx += 1
+        insert_transaction += "</doc></add><commit/>"
+
+        # finally we send this to solr
+        res = solr_add(self.ip_address+":"+str(self.port), insert_transaction)
+        print "res from insert --->", res
+        return res
 
 
     def processUpdate(self, statement):
@@ -236,8 +293,9 @@ class MySolrDbCursor():
         return solr_response
 
 
-
-
+####################################################
+## eventually move this out to the unit test file ##
+####################################################
 
 # assuming we have a solr index with a cat field and some docs
 # that have electronics in that field then the following should work ...
@@ -245,23 +303,16 @@ db = MySolrDb()
 db.connect(ip_address='localhost', port=8983)
 ## TODO: Waaa - I want db = MySolrDb.connect() like the big boys. sergey, where r u when i need u?
 cursor = db.cursor()
+
+'''
 sql_statement = "select * from joe WHERE cat = 'electronics'"
 res = cursor.execute(sql_statement)
 rows = cursor.fetchall()
-'''
-print "rows for ", sql_statement, "is --->", rows
-for row in rows:
-    print row
-'''
 
 sql_statement = "update joe set popularity = 3, manu='joe blow' WHERE cat = 'electronics'"
 res = cursor.execute(sql_statement)
-rows = cursor.fetchall()
-'''
-print "rows for ", sql_statement, "is --->", rows
-for row in rows:
-    print "\nROW:", row
-'''
 
-
+'''
+sql_statement = "insert into joe (f1, f2) values ('f1_val', 'f2_val')"
+res = cursor.execute(sql_statement)
 
