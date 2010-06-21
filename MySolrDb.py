@@ -141,6 +141,17 @@ class MySolrDbCursor():
 
         table_name = statement[len('insert into'):tindx].strip()
 
+        # next determine database name
+        if table_name.find(".") > -1:
+            # table name includes the database name
+            database_name, table_name = table_name.split(".")
+        else:
+            # else must have a default db name from a previous use or connect
+            if self.database_name is None:
+                raise Exception, 'Error - no database specified'
+            database_name = self.database_name
+
+
         # next we extract the field names TODO: validate them
         fn_start = tindx + 1
         fn_end = statement.find(")")
@@ -163,17 +174,21 @@ class MySolrDbCursor():
         fields_array = fields.split(",")
         vals_array = vals.split(",")
 
-        insert_transaction = "<add><doc>"
+        insert_transaction = "<add><doc><field name='id'>%s</field>" % (self.getNextId(),)
         indx = 0
         # TODO: handle array fields
         while indx < len(fields_array):
-            insert_transaction += "<field name='%s'>%s</field>" % (fields_array[indx].strip(), vals_array[indx].strip())
+            #insert_transaction += "<field name='%s_%s_%s'>%s</field>" % (database_name, table_name, fields_array[indx].strip(), vals_array[indx].strip())
+            column_name = fields_array[indx].strip()
+            column_val = vals_array[indx].strip()
+            insert_transaction += "<field name='column_name'>%s</field><field name='column_type'>%s</field>" % (database_name + "_" + table_name + "_" + column_name, 'string')
+            insert_transaction += "<field name='column_val_string'>%s</field>" % (column_val,)
             indx += 1
-        insert_transaction += "</doc></add><commit/>"
+        insert_transaction += "</doc></add>"
 
         # finally we send this to solr
         res = solr_add(self.ip_address+":"+str(self.port), insert_transaction)
-        print "res from insert --->", res
+        res = solr_commit("localhost:8983")
         return res
 
 
@@ -375,8 +390,8 @@ class MySolrDbCursor():
 
         #table_name = database_name + "_" + statement[tindx:pindx].strip()
 
-        # next determine database name
         table_name = statement[tindx:pindx].strip()
+        # next determine database name
         if table_name.find(".") > -1:
             # table name includes the database name
             database_name, table_name = table_name.split(".")
@@ -423,16 +438,16 @@ class MySolrDbCursor():
             if len(ca) > 2:
                 column_attribute1 = ca[2].strip()
 
-            solr_str = "<field name='id'>%s</field><field name='column_name'>%s</field><field name='column_type'>%s</field>" % (self.getNextId(), table_name + column_name, column_type)
+            solr_str = "<field name='id'>%s</field><field name='meta_column_name'>%s</field><field name='meta_column_type'>%s</field>" % (self.getNextId(), table_name + column_name, column_type)
 
             if column_type == 'int':
-                solr_str += "<field name='column_val_int'>%s</field>" % (column_default_val,)
+                solr_str += "<field name='meta_column_val_int'>%s</field>" % (column_default_val,)
             elif column_type == 'string':
-                solr_str += "<field name='column_val_string'>%s</field>" % (column_default_val,)
+                solr_str += "<field name='meta_column_val_string'>%s</field>" % (column_default_val,)
             elif column_type == 'float':
-                solr_str += "<field name='column_val_float'>%s</field>" % (column_default__val,)
+                solr_str += "<field name='meta_column_val_float'>%s</field>" % (column_default__val,)
             elif column_type == 'date':
-                solr_str += "<field name='column_val_date'>%s</field>" % (column_default_val,)
+                solr_str += "<field name='meta_column_val_date'>%s</field>" % (column_default_val,)
             else:
                 raise Exception, "Error invalid column type"
 
@@ -469,22 +484,39 @@ print "Database on this instance --->", databases
 ##########################################
 for database in databases:
     database_name = database['database_name']
+    database_name = database_name[0]
     solr_str = "fl=id,table_name&q=table_name:" + database_name + "_*"
     tables = solr_request("localhost:8983", solr_str)
     print database_name, "tables --->", tables
     for table in tables:
         table_name = table['table_name']
+        table_name = table_name[0]
         solr_str = "fl=id,column_name,column_type,column_val_string,column_val_int,column_val_float,column_val_timestamp&q=column_name:" + table_name + "_*"
         columns = solr_request("localhost:8983", solr_str)
         for column in columns:
             column_name = column['column_name']
+            column_name = column_name[0]
             column_name = column_name.replace(table_name, "")
             column_name = column_name[1:]
+
             column_type = column['column_type']
+            column_type = column_type[0]
+
             column_val_name = "column_val_%s" % (column_type, )
             print table_name, column_type, "column --->", column_name, "value --->", column[column_val_name]
 
-    
+res = cursor.execute("insert into mydb.test_table (name, ssn) values ('Joe Blow', '123-456-7890')")
+print "res from insert", res    
+
+res = cursor.execute("insert into mydb.test_table (name, ssn) values ('ken smith', '000-000-0000')")
+print "res from insert", res    
+
+# this is like a select * 
+solr_str = "fl=*&q=column_name:mydb_test_table_*"
+res = solr_request("localhost:8983", solr_str)
+print "res from select * --->", res
+
+
 
 
 

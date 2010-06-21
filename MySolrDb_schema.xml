@@ -275,24 +275,28 @@
        best performance.
    -->
 
-<!-- Note: id is an internally maintained field -->
-   <field name="id" type="integer" indexed="true" stored="true" required="true" /> 
+<field name="id" type="integer" indexed="true" stored="true" required="true" /> 
 
 <!-- these are the fields for a database record -->
-<field name="database_name" type="string" indexed="true" stored="true" /> 
+<field name="database_name" type="string" indexed="true" stored="true" multiValued="true" /> 
 
 <!-- Here is how a table is represented. note the actual name is databasename_tablename  -->
-<field name="table_name" type="string" indexed="true" stored="true" />
+<field name="table_name" type="string" indexed="true" stored="true" multiValued="true" />
 
-<!-- we overload the column name value to include its type for now.
-     types are _i = int, _s = string, _f = float, _t = timestamp  -->
+<field name="meta_column_name" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_type" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_val_int" type="integer" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_val_string" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_val_float" type="float" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_val_timestamp" type="date" indexed="true" stored="true" multiValued="true" />
+
 <!-- note column name is databasename_tablename_columnname -->
-<field name="column_name" type="string" indexed="true" stored="true" />
-<field name="column_type" type="string" indexed="true" stored="true" />
-<field name="column_val_int" type="integer" indexed="true" stored="true" />
-<field name="column_val_string" type="string" indexed="true" stored="true" />
-<field name="column_val_float" type="float" indexed="true" stored="true" />
-<field name="column_val_timestamp" type="date" indexed="true" stored="true" />
+<field name="column_name" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="column_type" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="column_val_int" type="integer" indexed="true" stored="true" multiValued="true" />
+<field name="column_val_string" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="column_val_float" type="float" indexed="true" stored="true" multiValued="true" />
+<field name="column_val_timestamp" type="date" indexed="true" stored="true" multiValued="true" />
 
 
 
