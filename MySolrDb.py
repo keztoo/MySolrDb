@@ -5,18 +5,16 @@
 ## a solr index as the database.
 ##
 ## MIA
-## (1) create database
-## (2) drop database
-## (3) create table
-## (4) drop table
-## (5) fetchone
-## (6) disconnect
-## (7) commit
-## (8) delete
+## (1) drop database
+## (2) drop table
+## (3) fetchone
+## (4) disconnect
+## (5) commit
+## (6) delete
 ##
 
 from MySolrDbParse import parseWhereClause
-from MySolrConnect import solr_request, solr_add
+from MySolrConnect import solr_request, solr_add, solr_commit
 
 
 class MySolrDb():
@@ -41,12 +39,14 @@ class MySolrDbCursor():
         self.port = kwargs.get('port', None)
         self.auto_commit = kwargs.get('auto_commit', False)
         self.last_result = None
+        self.database_name = None
 
     def fetchall(self):
         return self.last_result
 
     def execute(self, statement):
-        # for now we only support select, insert, update, delete
+        # for now we only support 'select', 'insert', 'update', 
+        # 'delete', 'create database' and 'create table'
         # will deal with joins later (maybe)
         if statement is None:
             return statement
@@ -73,12 +73,33 @@ class MySolrDbCursor():
         elif sa[0].lower().strip() == 'update':
             return self.processUpdate(statement)
 
+        ######################################
+        ## process use statements here ...  ##
+        ######################################
+        elif sa[0].lower().strip() == 'use':
+            return self.processUse(statement)
+
         #########################################
         ## process delete statements here ...  ##
         #########################################
         elif sa[0].lower().strip() == 'delete':
             return self.processDelete(statement)
 
+        #########################################
+        ## process create statements here ...  ##
+        #########################################
+        elif sa[0].lower().strip() == 'create':
+            # for create we have database and tables ...
+            tmp = statement.split(" ")
+            if len(tmp) < 3:
+                raise Exception, 'Illegal statement!'
+            if tmp[1].lower().strip() == 'database':
+                return self.createDatabase(statement)
+            elif tmp[1].lower().strip() == 'table':
+                return self.createTable(self.database_name, statement)
+            else:
+                raise Exception, 'Illegal statement!'
+            
         ############################################################
         ## else we have an unsupported format on our hands ...    ##
         ############################################################
@@ -90,6 +111,11 @@ class MySolrDbCursor():
 
     def handleWhereClause(self, where_clause):
         return parseWhereClause(where_clause)
+
+
+
+    def processUse(self, statement):
+        pass
 
 
     def processDelete(self, statement):
@@ -292,27 +318,161 @@ class MySolrDbCursor():
         solr_response = "200"
         return solr_response
 
+    def createDatabase(self, statement):
+        # expect 'create database database_name"
+        dindx = statement.find("database")
+        if dindx == -1:
+            raise Exception, 'Error - illegal statement'
+        dindx += len('database')
+        database_name = statement[dindx:].strip()
+        # first we check to see if we already have a database with the same name
+        solr_str = "fl=id&q=database_name:" + database_name 
+        database_record = solr_request("localhost:8983", solr_str)
+        if len(database_record) > 0:
+            raise Exception, 'Error database already exists!'
+
+        solr_str = "<add><doc><field name='id'>%s</field><field name='database_name'>%s</field></doc></add>" % (self.getNextId(),database_name)
+        res = solr_add("localhost:8983", solr_str)
+        res = solr_commit("localhost:8983")
+        return res
+
+
+    def getNextId(self):
+        solr_str = "fl=id&q=id:[0 TO *]&sort=id desc&start=0&rows=1"
+        last_id = solr_request("localhost:8983", solr_str)
+        try:
+            last_id = last_id[0]['id']
+        except:
+            print "Warning - last id was -1, adjusting to 1"
+            return 1
+        return int(last_id + 1)
+
+
+    def createTable(self, database_name, statement):
+        # supported format ...
+        # CREATE TABLE test_table (id int, name VARCHAR(32), ssn VARCHAR(32));
+
+        # note we have an issue to deal with here. if our table name is of the 
+        # for x.table_name then we need to use the database name from the 
+        # create statement otherwise we fall back to our self.database_name
+        # field and if both are None then we must throw an exception
+        # TODO: for now i hard code it to 'mydb'
+
+        database_name = 'mydb'
+
+        # first, extract table name
+        tindx = statement.lower().find('table')
+        if tindx == -1:
+            raise Exception, 'Error ill formed statement'
+        tindx += len('table')
+
+        pindx = statement.find("(")
+        if pindx == -1:
+            raise Exception, 'Error ill formed statement'
+
+        table_name = database_name + "_" + statement[tindx:pindx].strip()
+
+        # NOTE - we have a serious issue with ids !!!! until then we will commit after every update
+        solr_transaction = "<add><doc><field name='id'>%s</field><field name='table_name'>%s</field></doc></add>" % (self.getNextId(), table_name)
+        res = solr_add("localhost:8983", solr_transaction)
+        res = solr_commit("localhost:8983")
+
+        table_name += "_"
+
+        columns = statement[pindx+1:]
+        columns = columns[:-1]
+
+        column_array = columns.split(",")
+        for column in column_array:
+            # TODO: support default values !!! and other attributes (like enums!)
+            solr_str = ""
+            ca = column.split()
+            column_name = ca[0].strip()
+
+            column_type = ca[1].strip().lower()
+            if column_type[:len('int')] == 'int':
+                column_type = 'int'
+            elif column_type[:len('varchar')] == 'varchar':
+                column_type = 'string'
+            elif column_type[:len('float')] == 'float':
+                column_type = 'float'
+            elif column_type[:len('timestamp')] == 'timestamp':
+                column_type = 'date'
+            else:
+                raise Exception, "Error invalid column type"
+
+            column_attribute1 = ""
+            column_default_val = 0
+            if len(ca) > 2:
+                column_attribute1 = ca[2].strip()
+
+            solr_str = "<field name='id'>%s</field><field name='column_name'>%s</field><field name='column_type'>%s</field>" % (self.getNextId(), table_name + column_name, column_type)
+
+            if column_type == 'int':
+                solr_str += "<field name='column_val_int'>%s</field>" % (column_default_val,)
+            elif column_type == 'string':
+                solr_str += "<field name='column_val_string'>%s</field>" % (column_default_val,)
+            elif column_type == 'float':
+                solr_str += "<field name='column_val_float'>%s</field>" % (column_default__val,)
+            elif column_type == 'date':
+                solr_str += "<field name='column_val_date'>%s</field>" % (column_default_val,)
+            else:
+                raise Exception, "Error invalid column type"
+
+            solr_str = "<add><doc>" + solr_str + "</doc></add>"
+            res = solr_add("localhost:8983", solr_str)
+            res = solr_commit("localhost:8983")
+        return res
+
+
 
 ####################################################
 ## eventually move this out to the unit test file ##
 ####################################################
 
-# assuming we have a solr index with a cat field and some docs
-# that have electronics in that field then the following should work ...
 db = MySolrDb()
 db.connect(ip_address='localhost', port=8983)
 ## TODO: Waaa - I want db = MySolrDb.connect() like the big boys. sergey, where r u when i need u?
 cursor = db.cursor()
 
 '''
-sql_statement = "select * from joe WHERE cat = 'electronics'"
-res = cursor.execute(sql_statement)
-rows = cursor.fetchall()
-
-sql_statement = "update joe set popularity = 3, manu='joe blow' WHERE cat = 'electronics'"
-res = cursor.execute(sql_statement)
+res = createDatabase("create database mydb")
+res = createDatabase("create database yourdb")
 
 '''
-sql_statement = "insert into joe (f1, f2) values ('f1_val', 'f2_val')"
-res = cursor.execute(sql_statement)
+
+res = cursor.execute("create database mydb")
+create_table_statement = "CREATE TABLE test_table (id int, name VARCHAR(32), ssn VARCHAR(32))"
+res = cursor.execute(create_table_statement)
+
+############################################
+# this is like a show databases command    #
+############################################
+solr_str = "fl=id,database_name&q=database_name:[0 TO *]"
+databases = solr_request("localhost:8983", solr_str)
+print "Database on this instance --->", databases
+
+##########################################
+# for each database lets dump the tables #
+##########################################
+for database in databases:
+    database_name = database['database_name']
+    solr_str = "fl=id,table_name&q=table_name:" + database_name + "_*"
+    tables = solr_request("localhost:8983", solr_str)
+    print database_name, "tables --->", tables
+    for table in tables:
+        table_name = table['table_name']
+        solr_str = "fl=id,column_name,column_type,column_val_string,column_val_int,column_val_float,column_val_timestamp&q=column_name:" + table_name + "_*"
+        columns = solr_request("localhost:8983", solr_str)
+        for column in columns:
+            column_name = column['column_name']
+            column_name = column_name.replace(table_name, "")
+            column_name = column_name[1:]
+            column_type = column['column_type']
+            column_val_name = "column_val_%s" % (column_type, )
+            print table_name, column_type, "column --->", column_name, "value --->", column[column_val_name]
+
+    
+
+
 

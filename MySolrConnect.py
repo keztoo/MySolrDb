@@ -71,8 +71,6 @@ def solr_request(req_url, req_str):
     req_url = "http://" + req_url + "/solr/select"
     req_str = "?version=2.2&qt=standard&wt=json&indent=off&" + req_str
 
-    print "req_url --->", req_url
-    print "req_str --->", req_str
     try:
         req = urllib2.Request(req_url, req_str)
     except Exception:
@@ -142,102 +140,25 @@ def solr_add(req_url, DATA):
     return 0
 
 
-
-def old_solr_add(which_index, DATA):
-    """
-    Add a document to index
-    """
-    # req_url is ip:port
-    start = time.time()
-
-    req_url = "http://" + req_url + "/solr/select"
-    req_str = "?version=2.2&qt=standard&wt=json&indent=off&" + req_str
-
-    print "req_url --->", req_url
-    print "req_str --->", req_str
-
-    for index in WRITE_INDICES:
-        host_name = index + port
-        if DEBUG_WRITES:
-            print >> sys.stderr , "\nAttempting to Update Host", host_name
-
-        error_flag = False
-        try:
-            con = HTTPConnection(host_name)
-            con.putrequest('POST', '/solr/update/')
-            con.putheader('content-length', str(len(DATA)))
-            con.putheader('content-type', 'text/xml; charset=UTF-8')
-            con.endheaders()
-            con.send(DATA)
-            r = con.getresponse()
-        except Exception , ex:
-            error_flag = True
-            print >> sys.stderr , "solr_add Error - can not connect to update host", host_name
-            if DEBUG_WRITES:
-                print >> sys.stderr , "Exception, Host at ", host_name, "is not responding (probably a communication problem or the index is not started). must append to the ", which_index, "index for host", host_name, "the following xml --->", DATA
-        else:
-            # no httplib exception. we have a response 
-            if str(r.status) != '200':
-                error_flag = True
-                print >> sys.stderr , "solr_add %s unexpected response from %s: %s %s %s" % (datetime.now(), host_name, r.status, r.msg, r.reason)
-                if DEBUG_WRITES:
-                    print >> sys.stderr , "Exception, Host at ", host_name, "is not accepting the update (probably an index schema error). must append to the ", which_index, "index for host", host_name, "the following xml --->", DATA 
-
-        # TODO: BUG !
-        # if a write fails we need to add it to the end of the exception file for the appropriate index
-        # for now this will simply end up in a log file until i can figure out how to write to a common
-        # file (common across all on-line instances).
-        if error_flag:
-            # here we will write this to an exception file
-            # solr_exception_file_name is a temporary store for failed writes, not a log of exceptions
-            solr_exception_file_name = SolrCfg().getFailedWritesBacklog(host_name, which_index)
-            if DEBUG_WRITES:
-                print >> sys.stderr , "XXXX Writing to ", solr_exception_file_name
-            try:
-                #import codecs
-                #f = codecs.open(solr_exception_file_name, encoding='utf-8', mode='a')
-                f = open(solr_exception_file_name, "ab")
-                f.write(DATA + "\n")
-                f.close()
-            except Exception , e:
-                print >> sys.stderr , 'WARNING: Error writing exception to file %s : %s', (solr_exception_file_name, e)
-                raise Exception, 'Solr Add Exception'
-
-    # NOTE: this will only return -1 if the most recent write attempt failed
-    if error_flag:
-        return -1 
-    return 0
-
-
-
-
-
-
-def solr_commit(which_index):
+def solr_commit(req_url):
     """
     commit changes
     """
     DATA = '<commit/>'
-    host_name = solr_indices[which_index][7:]
+    host_name = req_url
 
-    # note this really sucks but i'll refactor it later
-    port_start = host_name.find(":")
-    port = host_name[port_start:]
+    #print "\nAttempting to Commit to Host", host_name
 
-    for index in WRITE_INDICES:
-        host_name = index + port
-        print "\nAttempting to Commit to Host", host_name
-
-        try:
-            con = HTTPConnection(host_name)
-            con.putrequest('POST', '/solr/update/')
-            con.putheader('content-length', str(len(DATA)))
-            con.putheader('content-type', 'text/xml; charset=UTF-8')
-            con.endheaders()
-            con.send(DATA)
-            r = con.getresponse()
-        except Exception , ex:
-            print >> sys.stderr , "Error - can not commit to host", host_name, ex
+    try:
+        con = HTTPConnection(host_name)
+        con.putrequest('POST', '/solr/update/')
+        con.putheader('content-length', str(len(DATA)))
+        con.putheader('content-type', 'text/xml; charset=UTF-8')
+        con.endheaders()
+        con.send(DATA)
+        r = con.getresponse()
+    except Exception , ex:
+        print >> sys.stderr , "Error - can not commit to host", host_name, ex
 
     if str(r.status) == '200':
         return 0
