@@ -115,7 +115,10 @@ class MySolrDbCursor():
 
 
     def processUse(self, statement):
-        pass
+        database_name = statement[len('use'):].strip()
+        # someday we will validate this 
+        self.database_name = database_name
+        return 0
 
 
     def processDelete(self, statement):
@@ -353,12 +356,12 @@ class MySolrDbCursor():
         # CREATE TABLE test_table (id int, name VARCHAR(32), ssn VARCHAR(32));
 
         # note we have an issue to deal with here. if our table name is of the 
-        # for x.table_name then we need to use the database name from the 
+        # form x.table_name then we need to use the database name (x) from the 
         # create statement otherwise we fall back to our self.database_name
         # field and if both are None then we must throw an exception
         # TODO: for now i hard code it to 'mydb'
 
-        database_name = 'mydb'
+        #database_name = 'mydb'
 
         # first, extract table name
         tindx = statement.lower().find('table')
@@ -370,7 +373,21 @@ class MySolrDbCursor():
         if pindx == -1:
             raise Exception, 'Error ill formed statement'
 
-        table_name = database_name + "_" + statement[tindx:pindx].strip()
+        #table_name = database_name + "_" + statement[tindx:pindx].strip()
+
+        # next determine database name
+        table_name = statement[tindx:pindx].strip()
+        if table_name.find(".") > -1:
+            # table name includes the database name
+            database_name, table_name = table_name.split(".")
+        else:
+            # else must have a default db name from a previous use or connect
+            if self.database_name is None:
+                raise Exception, 'Error - no database specified'
+            database_name = self.database_name
+
+        # and for our purposes table name is databasename skid tablename
+        table_name = database_name + "_" + table_name
 
         # NOTE - we have a serious issue with ids !!!! until then we will commit after every update
         solr_transaction = "<add><doc><field name='id'>%s</field><field name='table_name'>%s</field></doc></add>" % (self.getNextId(), table_name)
@@ -435,13 +452,8 @@ db.connect(ip_address='localhost', port=8983)
 ## TODO: Waaa - I want db = MySolrDb.connect() like the big boys. sergey, where r u when i need u?
 cursor = db.cursor()
 
-'''
-res = createDatabase("create database mydb")
-res = createDatabase("create database yourdb")
-
-'''
-
 res = cursor.execute("create database mydb")
+res = cursor.execute("use mydb")
 create_table_statement = "CREATE TABLE test_table (id int, name VARCHAR(32), ssn VARCHAR(32))"
 res = cursor.execute(create_table_statement)
 
