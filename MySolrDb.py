@@ -109,8 +109,8 @@ class MySolrDbCursor():
         return None
 
 
-    def handleWhereClause(self, where_clause):
-        return parseWhereClause(where_clause)
+    def handleWhereClause(self, database_name, table_name, where_clause):
+        return parseWhereClause(database_name, table_name, where_clause)
 
 
 
@@ -151,7 +151,6 @@ class MySolrDbCursor():
                 raise Exception, 'Error - no database specified'
             database_name = self.database_name
 
-
         # next we extract the field names TODO: validate them
         fn_start = tindx + 1
         fn_end = statement.find(")")
@@ -178,9 +177,10 @@ class MySolrDbCursor():
         indx = 0
         # TODO: handle array fields
         while indx < len(fields_array):
-            #insert_transaction += "<field name='%s_%s_%s'>%s</field>" % (database_name, table_name, fields_array[indx].strip(), vals_array[indx].strip())
             column_name = fields_array[indx].strip()
             column_val = vals_array[indx].strip()
+            # BUG for now i stript any single quotes but this needs to be handled better soon!
+            column_val = column_val.replace("'","")
             insert_transaction += "<field name='column_name'>%s</field><field name='column_type'>%s</field>" % (database_name + "_" + table_name + "_" + column_name, 'string')
             insert_transaction += "<field name='column_val_string'>%s</field>" % (column_val,)
             indx += 1
@@ -307,6 +307,16 @@ class MySolrDbCursor():
         # and oh, btw we currently don't support aliasing
         table_name = table_portion.strip()[len('from'):].strip()
 
+        # next determine database name
+        if table_name.find(".") > -1:
+            # table name includes the database name
+            database_name, table_name = table_name.split(".")
+        else:
+            # else must have a default db name from a previous use or connect
+            if self.database_name is None:
+                raise Exception, 'Error - no database specified'
+            database_name = self.database_name
+
         # for the select portion we knmow that ultimately
         # field names must be separated by a comma.
         field_list = select_portion.strip()[len('select'):].strip()
@@ -322,10 +332,15 @@ class MySolrDbCursor():
         # about things like table name or aliases. 
         # since this will get ugly in a hurry we will farm it out ...
         where_clause = where_portion.strip()[len('where'):].strip()
-        where_result = self.handleWhereClause(where_clause)
+
+        print "XXXXX where_clause --->", where_clause
+
+        where_result = self.handleWhereClause(database_name, table_name, where_clause)
 
         # finally we can produce a solr statement
         solr_statement = "fl=" + solr_field_list + "&q=" + where_result
+
+        print "XXX", solr_statement
 
         # finally we query the solr index and store the results
         solr_host = self.ip_address + ":" + str(self.port) 
@@ -481,6 +496,7 @@ print "Database on this instance --->", databases
 
 ##########################################
 # for each database lets dump the tables #
+# just like a show table command         #
 ##########################################
 for database in databases:
     database_name = database['database_name']
@@ -505,17 +521,25 @@ for database in databases:
             column_val_name = "meta_column_val_%s" % (column_type, )
             print table_name, column_type, "column --->", column_name, "value --->", column[column_val_name]
 
-res = cursor.execute("insert into mydb.test_table (name, ssn) values ('Joe Blow', '123-456-7890')")
+# try various mysql like operations 
+res = cursor.execute("insert into mydb.test_table (name, ssn) values ('bla', '123-456-7890')")
 print "res from insert", res    
 
 res = cursor.execute("insert into mydb.test_table (name, ssn) values ('ken smith', '000-000-0000')")
 print "res from insert", res    
 
-# this is like a select * 
+# this is like a select * from test_table
 solr_str = "fl=*&q=column_name:mydb_test_table_*"
 res = solr_request("localhost:8983", solr_str)
-print "res from select * --->", res
+print "res from select * done manually --->", res
 
+#select_str = "select * from test_table where name = 'Joe Blow'"  # bug workaround
+select_str = "select * from test_table where name = 'bla'"
+print "tring select ...", select_str
+res = cursor.execute(select_str)
+print "res is --->", res
+res = cursor.fetchall()
+print "docs --->", res
 
 
 

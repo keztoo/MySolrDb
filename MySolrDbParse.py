@@ -21,7 +21,7 @@ def atom(token):
     else:
         return None
 
-def parseWhereClause(source):
+def parseWhereClause(database_name, table_name, source):
     src = cStringIO.StringIO(source).readline
     src = tokenize.generate_tokens(src)
     operator = ""
@@ -33,8 +33,10 @@ def parseWhereClause(source):
             state += 1
             sub_statement = ""
             if s[0] is tokenize.NAME:
-                sub_statement = s[1]+":"
+                #sub_statement = s[1]+":"
+                sub_statement = "column_val_string:"
                 p1_type = 'column'
+                column_name = s[1]
             elif s[0] is tokenize.STRING or s[0] is tokenize.NUMBER:
                 sub_statement = ":"+str(atom(s))
                 p1_type = 'constant'
@@ -55,6 +57,7 @@ def parseWhereClause(source):
             if s[0] is tokenize.NAME:
                 if p1_type == 'column':
                     sub_statement += s[1]
+                    column_name = s[1]
                 else:
                     raise Exception, 'Column to Column compare currently unsupported!'
             elif s[0] is tokenize.STRING or s[0] is tokenize.NUMBER:
@@ -64,6 +67,7 @@ def parseWhereClause(source):
                     raise Exception, 'Error - constant to constant compare detected!'
             else:
                 raise Exception, 'Ill formed statement'
+            sub_statement += " AND column_name:"+database_name+"_"+table_name+"_"+column_name
 
         elif state == 3:
             state += 1
