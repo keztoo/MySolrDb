@@ -491,18 +491,18 @@ for database in databases:
     for table in tables:
         table_name = table['table_name']
         table_name = table_name[0]
-        solr_str = "fl=id,column_name,column_type,column_val_string,column_val_int,column_val_float,column_val_timestamp&q=column_name:" + table_name + "_*"
+        solr_str = "fl=id,meta_column_name,meta_column_type,meta_column_val_string,meta_column_val_int,meta_column_val_float,meta_column_val_timestamp&q=meta_column_name:" + table_name + "_*"
         columns = solr_request("localhost:8983", solr_str)
         for column in columns:
-            column_name = column['column_name']
+            column_name = column['meta_column_name']
             column_name = column_name[0]
             column_name = column_name.replace(table_name, "")
             column_name = column_name[1:]
 
-            column_type = column['column_type']
+            column_type = column['meta_column_type']
             column_type = column_type[0]
 
-            column_val_name = "column_val_%s" % (column_type, )
+            column_val_name = "meta_column_val_%s" % (column_type, )
             print table_name, column_type, "column --->", column_name, "value --->", column[column_val_name]
 
 res = cursor.execute("insert into mydb.test_table (name, ssn) values ('Joe Blow', '123-456-7890')")
