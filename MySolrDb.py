@@ -360,12 +360,10 @@ class MySolrDbCursor():
 
         where_result = self.handleWhereClause(database_name, table_name, where_clause)
 
-        # BUG here we must query the solr index for every 'AND' component
-
-        #solr_statement = "fl=parent_id&q=" + where_result
         solr_statement_array = where_result.split("AND")
 
         res = None
+        first = 0
         for solr_statement in solr_statement_array:
             solr_host = self.ip_address + ":" + str(self.port) 
             solr_statement = solr_statement.strip()
@@ -373,7 +371,13 @@ class MySolrDbCursor():
             solr_statement = "fl=parent_id&start=0&rows=9999&q=" + solr_statement
             print "XXX", solr_statement
             and_res = solr_request(solr_host, solr_statement)
-            print "XXXX AND res --->", and_res
+            if first == 0:
+                first = 1
+                res = and_res
+                print "XXX res --->", res
+            else:
+                for a in and_res:
+                    print "XXX a['parent_id'] --->", a['parent_id']
 
         # and place result in last_result
         #self.last_result = solr_request(solr_host, solr_statement)
