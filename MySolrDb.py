@@ -359,27 +359,26 @@ class MySolrDbCursor():
         where_clause = where_portion.strip()[len('where'):].strip()
 
         where_result = self.handleWhereClause(database_name, table_name, where_clause)
+        where_result = where_result[1:len(where_result)-1]
 
-        solr_statement_array = where_result.split("AND")
+        solr_statement_array = where_result.split(") AND (")
 
         res = None
         first = 0
         for solr_statement in solr_statement_array:
             solr_host = self.ip_address + ":" + str(self.port) 
             solr_statement = solr_statement.strip()
-            solr_statement = solr_statement[1:len(solr_statement)-1]
             solr_statement = "fl=parent_id&start=0&rows=9999&q=" + solr_statement
-            print "XXX", solr_statement
             and_res = solr_request(solr_host, solr_statement)
             if first == 0:
                 first = 1
                 res = and_res
-                print "XXX res --->", res
+                #print "XXX res --->", res
             else:
-                for a in and_res:
-                    print "XXX a['parent_id'] --->", a['parent_id']
+                res += and_res
 
-        # and place result in last_result
+        # BUG store detail not ids !
+        # store result in last_result
         #self.last_result = solr_request(solr_host, solr_statement)
         self.last_result = res
 
@@ -571,7 +570,7 @@ res = solr_request("localhost:8983", solr_str)
 print "res from select * done manually --->", res
 '''
 
-select_str = "select * from test_table where name = 'ken smith'"  # bug workaround
+select_str = "select * from test_table where name = 'ken smith'" 
 print "tring select ...", select_str
 res = cursor.execute(select_str)
 print "res is --->", res

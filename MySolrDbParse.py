@@ -66,8 +66,7 @@ def parseWhereClause(database_name, table_name, source):
                     raise Exception, 'Error - constant to constant compare detected!'
             else:
                 raise Exception, 'Ill formed statement'
-            #sub_statement += " AND column_name:"+database_name+"_"+table_name+"_"+column_name + ")"
-            sub_statement += ")"
+            sub_statement += " AND column_name:"+database_name+"_"+table_name+"_"+column_name + ")"
 
         elif state == 3:
             state += 1
