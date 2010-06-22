@@ -307,7 +307,15 @@ class MySolrDbCursor():
 
     def processSelect(self, statement):
         # BUG - missing 'like' support
-        # we require 'from' and 'where' to also be present
+        #
+        # BIG BUG - we need to rethink the way we handle connectives
+        # (and/or) because i believe ORs can be handle with a single 
+        # trip to the solr index but ANDs require manual processing!
+        #
+        # BUG 3 - we cant require 'where' cause i believe 
+        # select * from table_name is valid mysql syntax
+
+        # we require 'from' and 'where' to both be present
         findx = statement.lower().find('from')
         windx = statement.lower().find('where')
         if findx == -1 or windx == -1:
@@ -346,8 +354,7 @@ class MySolrDbCursor():
             #print "Must Validate Field Name --->", field.strip()
             pass
 
-        # for the where portion, again we don't currently worry
-        # about things like table name or aliases. 
+        # BUG - we dont handle field name aliasing!
         # since this will get ugly in a hurry we will farm it out ...
         where_clause = where_portion.strip()[len('where'):].strip()
 
@@ -355,18 +362,20 @@ class MySolrDbCursor():
 
         # finally we can produce a solr statement
         solr_statement = "fl=" + solr_field_list + "&q=" + where_result
-        # BUG - here we can only pull back a list of document ids
-        # we will need to manually process them (yuk) probably!
-        # with a second trip to the index. 
+
+        # BIG BIG BUG - here we can only pull back a list of document ids
+        # we will need to manually process them (yuk) with a second trip to
+        # the index which means we must loop thru here for any 'AND' clauses 
+        # we have and re-query the index for each one and then manually combine them
+        # ARRRRRRRRRRRRRRRRRRGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
         solr_statement = "fl=parent_id&q=" + where_result
 
         print "XXX", solr_statement
 
-        #  next we query the solr index and grab all data for the ids we just pulled back
         solr_host = self.ip_address + ":" + str(self.port) 
         solr_statement = "start=0&rows=9999&" + solr_statement
 
-        # now we have to process our results
+
 
         self.last_result = solr_request(solr_host, solr_statement)
 
