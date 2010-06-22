@@ -306,15 +306,10 @@ class MySolrDbCursor():
 
     def processSelect(self, statement):
         # BUG - missing 'like' support
-        #
-        # BIG BUG - we need to rethink the way we handle connectives
-        # (and/or) because i believe ORs can be handle with a single 
-        # trip to the solr index but ANDs require manual processing!
-        #
-        # BUG 3 - we cant require 'where' cause i believe 
+        # BUG - we cant require 'where' cause i believe 
         # select * from table_name is valid mysql syntax
 
-        # we require 'from' and 'where' to both be present
+        # currently we require 'from' and 'where' to both be present
         findx = statement.lower().find('from')
         windx = statement.lower().find('where')
         if findx == -1 or windx == -1:
@@ -342,17 +337,6 @@ class MySolrDbCursor():
                 raise Exception, 'Error - no database specified'
             database_name = self.database_name
 
-        # for the select portion we knmow that ultimately
-        # field names must be separated by a comma.
-        field_list = select_portion.strip()[len('select'):].strip()
-        solr_field_list = field_list
-        solr_field_list = solr_field_list.replace(" ", "")
-        field_list = field_list.split(",")
-        for field in field_list:
-            ## TODO: if any of these are invalid throw an exception here!
-            #print "Must Validate Field Name --->", field.strip()
-            pass
-
         # since this will get ugly in a hurry we will farm it out ...
         where_clause = where_portion.strip()[len('where'):].strip()
 
@@ -364,7 +348,6 @@ class MySolrDbCursor():
         # this brutish code attempts to provide the product of values
         # of one or more lists of dicts. the good news is it can 
         # optimized later to produce better performance
-
         result_set = []
         first = 0
         for solr_statement in solr_statement_array:
@@ -387,17 +370,42 @@ class MySolrDbCursor():
         # so at this point result_set has a list of anchor roots which
         # meet our select criteria, here we go back and grab the fields
         # for each detail record. field_list should have the desired fields
+        # heres what we really need. fl=column_val_string and a query that looks like this ...
+        # q=(id:9 AND column_name:dbname_tablename_fieldname) OR (id:9 AND column_name:dbname_tablename_fieldname2)
+
+
+        # for the select portion we knmow that ultimately
+        # field names must be separated by a comma.
+        field_list = select_portion.strip()[len('select'):].strip()
+        solr_field_list = ""
+        if field_list != "*":
+            field_list = field_list.split(",")
+            for field in field_list:
+                ## TODO: if any of these are invalid throw an exception here!
+                #print "Must Validate Field Name --->", field.strip()
+                field_name = database_name +"_" + table_name + "_" + field.strip() 
+                solr_field_list += field_name + ","
+            solr_field_list = solr_field_list[:-1]
+        else:
+            solr_field_list = "*"
+
+        fields_array = solr_field_list.split(",")
 
         # BUG - need to figure out what rows should be
-        solr_statement = "fl=*&start=0&rows=999&q="        
-
+        solr_statement = "fl=column_val_string,column_name&start=0&rows=999&q="        
 
         for rs in result_set:
-            solr_statement += "parent_id:"+str(rs)+" OR "
+            if solr_field_list == "*":
+                solr_statement += "parent_id:" + str(rs) + " OR "
+            else:
+                for field in fields_array:
+                    solr_statement += "(parent_id:" + str(rs) +" AND column_name:" + field + ") OR "
+
         solr_statement = solr_statement[:-4]
 
-        # BUG only pull back specified fields not all!!!
         # store result in last_result
+        print "XXX", solr_statement
+
         self.last_result = solr_request(solr_host, solr_statement)
 
         # this should come from the response i guess but which one?
@@ -607,6 +615,18 @@ print "res is --->", res
 res = cursor.fetchall()
 print "docs --->", res
 
+select_str = "select ssn from test_table where name = 'ken smith' and ssn = '000-00-0000'" 
+print "select ...", select_str
+res = cursor.execute(select_str)
+print "res is --->", res
+res = cursor.fetchall()
+print "docs --->", res
 
+select_str = "select name, ssn from test_table where name = 'ken smith' and ssn = '000-00-0000'" 
+print "select ...", select_str
+res = cursor.execute(select_str)
+print "res is --->", res
+res = cursor.fetchall()
+print "docs --->", res
 
 
