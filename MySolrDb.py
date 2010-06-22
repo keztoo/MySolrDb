@@ -334,18 +334,25 @@ class MySolrDbCursor():
         # since this will get ugly in a hurry we will farm it out ...
         where_clause = where_portion.strip()[len('where'):].strip()
 
-        print "XXXXX where_clause --->", where_clause
-
         where_result = self.handleWhereClause(database_name, table_name, where_clause)
 
         # finally we can produce a solr statement
         solr_statement = "fl=" + solr_field_list + "&q=" + where_result
+        # BUG - here we can only pull back a list of document ids
+        # we will need to manually process them (yuk) probably!
+        # with a second trip to the index. 
+        solr_statement = "fl=id&q=" + where_result
 
         print "XXX", solr_statement
 
-        # finally we query the solr index and store the results
+        #  next we query the solr index and grab all data for the ids we just pulled back
         solr_host = self.ip_address + ":" + str(self.port) 
         solr_statement = "start=0&rows=9999&" + solr_statement
+
+        # now we have to process our results
+
+
+
         self.last_result = solr_request(solr_host, solr_statement)
 
         # this should come from the response
