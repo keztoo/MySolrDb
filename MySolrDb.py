@@ -289,6 +289,7 @@ class MySolrDbCursor():
 
 
     def processSelect(self, statement):
+        # BUG - missing 'like' support
         # we require 'from' and 'where' to also be present
         findx = statement.lower().find('from')
         windx = statement.lower().find('where')
@@ -533,8 +534,15 @@ solr_str = "fl=*&q=column_name:mydb_test_table_*"
 res = solr_request("localhost:8983", solr_str)
 print "res from select * done manually --->", res
 
-#select_str = "select * from test_table where name = 'Joe Blow'"  # bug workaround
-select_str = "select * from test_table where name = 'bla'"
+select_str = "select * from test_table where name = 'ken smith'"  # bug workaround
+print "tring select ...", select_str
+res = cursor.execute(select_str)
+print "res is --->", res
+res = cursor.fetchall()
+print "docs --->", res
+
+
+select_str = "select * from test_table where name = 'ken smith' and ssn = '000-00-0000'"  # bug workaround
 print "tring select ...", select_str
 res = cursor.execute(select_str)
 print "res is --->", res

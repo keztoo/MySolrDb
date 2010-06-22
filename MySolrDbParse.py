@@ -9,8 +9,8 @@ def atom(token):
     if token[0] is tokenize.NAME:
         return token[1]
     elif token[0] is tokenize.STRING:
-        return token[1][1:-1].decode("string-escape")
-        #return "'" + token[1][1:-1].decode("string-escape") + "'"
+        #return token[1][1:-1].decode("string-escape")
+        return '"' + token[1][1:-1].decode("string-escape") + '"'
     elif token[0] is tokenize.NUMBER:
         try:
             return int(token[1], 0)
@@ -33,8 +33,7 @@ def parseWhereClause(database_name, table_name, source):
             state += 1
             sub_statement = ""
             if s[0] is tokenize.NAME:
-                #sub_statement = s[1]+":"
-                sub_statement = "column_val_string:"
+                sub_statement = "(column_val_string:"
                 p1_type = 'column'
                 column_name = s[1]
             elif s[0] is tokenize.STRING or s[0] is tokenize.NUMBER:
@@ -67,7 +66,7 @@ def parseWhereClause(database_name, table_name, source):
                     raise Exception, 'Error - constant to constant compare detected!'
             else:
                 raise Exception, 'Ill formed statement'
-            sub_statement += " AND column_name:"+database_name+"_"+table_name+"_"+column_name
+            sub_statement += " AND column_name:"+database_name+"_"+table_name+"_"+column_name + ")"
 
         elif state == 3:
             state += 1
