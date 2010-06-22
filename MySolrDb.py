@@ -203,7 +203,6 @@ class MySolrDbCursor():
             indx += 1
 
             # finally we send this to solr
-            print "\nInsert this --->", column_xml
             res = solr_add(self.ip_address+":"+str(self.port), column_xml)
             res = solr_commit("localhost:8983")
 
@@ -286,7 +285,6 @@ class MySolrDbCursor():
 
         # finally we update our solr index
         res = solr_add(self.ip_address+":"+str(self.port), update_transaction)
-        print "res --->", res
 
         # and return the update status from the solr response
         return 0
@@ -361,9 +359,13 @@ class MySolrDbCursor():
         where_result = self.handleWhereClause(database_name, table_name, where_clause)
         where_result = where_result[1:len(where_result)-1]
 
-        solr_statement_array = where_result.split(") AND (")
+        solr_statement_array = where_result.split(") AND (")     # BUG this is a very fragile thing!
 
-        res = None
+        # this brutish code attempts to provide the product of values
+        # of one or more lists of dicts. the good news is it can 
+        # optimized later to produce better performance
+
+        result_set = []
         first = 0
         for solr_statement in solr_statement_array:
             solr_host = self.ip_address + ":" + str(self.port) 
@@ -372,15 +374,31 @@ class MySolrDbCursor():
             and_res = solr_request(solr_host, solr_statement)
             if first == 0:
                 first = 1
-                res = and_res
-                #print "XXX res --->", res
+                for pid in and_res:
+                    result_set.append(pid['parent_id'])
             else:
-                res += and_res
+                first += 1
+                new_res = []
+                for pid in and_res:
+                    if pid['parent_id'] in result_set:
+                        new_res.append(pid['parent_id'])
+                result_set = new_res
 
-        # BUG store detail not ids !
+        # so at this point result_set has a list of anchor roots which
+        # meet our select criteria, here we go back and grab the fields
+        # for each detail record. field_list should have the desired fields
+
+        # BUG - need to figure out what rows should be
+        solr_statement = "fl=*&start=0&rows=999&q="        
+
+
+        for rs in result_set:
+            solr_statement += "parent_id:"+str(rs)+" OR "
+        solr_statement = solr_statement[:-4]
+
+        # BUG only pull back specified fields not all!!!
         # store result in last_result
-        #self.last_result = solr_request(solr_host, solr_statement)
-        self.last_result = res
+        self.last_result = solr_request(solr_host, solr_statement)
 
         # this should come from the response i guess but which one?
         solr_response = "200"
@@ -554,14 +572,17 @@ for database in databases:
             column_type = column_type[0]
 
             column_val_name = "meta_column_val_%s" % (column_type, )
-            print table_name, column_type, "column --->", column_name, "value --->", column[column_val_name]
+            print table_name, column_type, "column --->", column_name, "default value --->", column[column_val_name]
 
 # try various mysql like operations 
 res = cursor.execute("insert into mydb.test_table (name, ssn) values ('bla', '123-456-7890')")
-print "res from insert", res    
+print "\nres from insert into mydb.test_table (name, ssn) values ('bla', '123-456-7890')", res    
 
 res = cursor.execute("insert into mydb.test_table (name, ssn) values ('ken smith', '000-00-0000')")
-print "res from insert", res    
+print "\nres from insert into mydb.test_table (name, ssn) values ('ken smith', '000-00-0000')", res    
+
+res = cursor.execute("insert into mydb.test_table (name, ssn) values ('Joe Blow', '000-00-0000')")
+print "\nres from insert into mydb.test_table (name, ssn) values ('Joe Blow', '000-00-0000')", res    
 
 '''
 # this is like a select * from test_table
