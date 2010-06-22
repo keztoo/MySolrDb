@@ -203,6 +203,7 @@ class MySolrDbCursor():
             indx += 1
 
             # finally we send this to solr
+            print "\nInsert this --->", column_xml
             res = solr_add(self.ip_address+":"+str(self.port), column_xml)
             res = solr_commit("localhost:8983")
 
@@ -354,7 +355,6 @@ class MySolrDbCursor():
             #print "Must Validate Field Name --->", field.strip()
             pass
 
-        # BUG - we dont handle field name aliasing!
         # since this will get ugly in a hurry we will farm it out ...
         where_clause = where_portion.strip()[len('where'):].strip()
 
@@ -368,10 +368,12 @@ class MySolrDbCursor():
         res = None
         for solr_statement in solr_statement_array:
             solr_host = self.ip_address + ":" + str(self.port) 
+            solr_statement = solr_statement.strip()
+            solr_statement = solr_statement[1:len(solr_statement)-1]
             solr_statement = "fl=parent_id&start=0&rows=9999&q=" + solr_statement
             print "XXX", solr_statement
             and_res = solr_request(solr_host, solr_statement)
-            res = and_res
+            print "XXXX AND res --->", and_res
 
         # and place result in last_result
         #self.last_result = solr_request(solr_host, solr_statement)
@@ -555,13 +557,15 @@ for database in databases:
 res = cursor.execute("insert into mydb.test_table (name, ssn) values ('bla', '123-456-7890')")
 print "res from insert", res    
 
-res = cursor.execute("insert into mydb.test_table (name, ssn) values ('ken smith', '000-000-0000')")
+res = cursor.execute("insert into mydb.test_table (name, ssn) values ('ken smith', '000-00-0000')")
 print "res from insert", res    
 
+'''
 # this is like a select * from test_table
 solr_str = "fl=*&q=column_name:mydb_test_table_*"
 res = solr_request("localhost:8983", solr_str)
 print "res from select * done manually --->", res
+'''
 
 select_str = "select * from test_table where name = 'ken smith'"  # bug workaround
 print "tring select ...", select_str
@@ -570,9 +574,10 @@ print "res is --->", res
 res = cursor.fetchall()
 print "docs --->", res
 
+print "\n\n----------------------\n\n"
 
-select_str = "select * from test_table where name = 'ken smith' and ssn = '000-00-0000'"  # bug workaround
-print "tring select ...", select_str
+select_str = "select * from test_table where name = 'ken smith' and ssn = '000-00-0000'" 
+print "select ...", select_str
 res = cursor.execute(select_str)
 print "res is --->", res
 res = cursor.fetchall()
