@@ -360,26 +360,24 @@ class MySolrDbCursor():
 
         where_result = self.handleWhereClause(database_name, table_name, where_clause)
 
-        # finally we can produce a solr statement
-        solr_statement = "fl=" + solr_field_list + "&q=" + where_result
+        # BUG here we must query the solr index for every 'AND' component
 
-        # BIG BIG BUG - here we can only pull back a list of document ids
-        # we will need to manually process them (yuk) with a second trip to
-        # the index which means we must loop thru here for any 'AND' clauses 
-        # we have and re-query the index for each one and then manually combine them
-        # ARRRRRRRRRRRRRRRRRRGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
-        solr_statement = "fl=parent_id&q=" + where_result
+        #solr_statement = "fl=parent_id&q=" + where_result
+        solr_statement_array = where_result.split("AND")
 
-        print "XXX", solr_statement
+        res = None
+        for solr_statement in solr_statement_array:
+            solr_host = self.ip_address + ":" + str(self.port) 
+            solr_statement = "fl=parent_id&start=0&rows=9999&q=" + solr_statement
+            print "XXX", solr_statement
+            and_res = solr_request(solr_host, solr_statement)
+            res = and_res
 
-        solr_host = self.ip_address + ":" + str(self.port) 
-        solr_statement = "start=0&rows=9999&" + solr_statement
+        # and place result in last_result
+        #self.last_result = solr_request(solr_host, solr_statement)
+        self.last_result = res
 
-
-
-        self.last_result = solr_request(solr_host, solr_statement)
-
-        # this should come from the response
+        # this should come from the response i guess but which one?
         solr_response = "200"
         return solr_response
 
