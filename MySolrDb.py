@@ -173,22 +173,39 @@ class MySolrDbCursor():
         fields_array = fields.split(",")
         vals_array = vals.split(",")
 
-        insert_transaction = "<add><doc><field name='id'>%s</field>" % (self.getNextId(),)
+        parent_id = self.getNextId()
+
+        # this is gonna get ugly in a hurry :-(
+        row_anchor = "<add><doc><field name='id'>%s</field><field name='row_anchor'>%s</field></doc></add>" % (parent_id,parent_id)
+
+        # this makes next id a reality but it is a bug ridden approach
+        res = solr_add(self.ip_address+":"+str(self.port), row_anchor)
+        res = solr_commit("localhost:8983")
+        
         indx = 0
         # TODO: handle array fields
         while indx < len(fields_array):
             column_name = fields_array[indx].strip()
+
             column_val = vals_array[indx].strip()
             # BUG for now i stript any single quotes but this needs to be handled better soon!
             column_val = column_val.replace("'","")
-            insert_transaction += "<field name='column_name'>%s</field><field name='column_type'>%s</field>" % (database_name + "_" + table_name + "_" + column_name, 'string')
-            insert_transaction += "<field name='column_val_string'>%s</field>" % (column_val,)
-            indx += 1
-        insert_transaction += "</doc></add>"
 
-        # finally we send this to solr
-        res = solr_add(self.ip_address+":"+str(self.port), insert_transaction)
-        res = solr_commit("localhost:8983")
+            column_xml = "<add><doc><field name='id'>%s</field><field name='parent_id'>%s</field>" % (self.getNextId(),parent_id)
+
+            column_xml += "<field name='column_name'>%s</field>" % (database_name + "_" + table_name + "_" + column_name,)
+
+            column_xml += "<field name='column_type'>%s</field>" % ('string',)   # BUG !! 
+            column_xml += "<field name='column_val_string'>%s</field>" % (column_val,)
+
+            column_xml += "</doc></add>"
+
+            indx += 1
+
+            # finally we send this to solr
+            res = solr_add(self.ip_address+":"+str(self.port), column_xml)
+            res = solr_commit("localhost:8983")
+
         return res
 
 
@@ -341,7 +358,7 @@ class MySolrDbCursor():
         # BUG - here we can only pull back a list of document ids
         # we will need to manually process them (yuk) probably!
         # with a second trip to the index. 
-        solr_statement = "fl=id&q=" + where_result
+        solr_statement = "fl=parent_id&q=" + where_result
 
         print "XXX", solr_statement
 
@@ -350,8 +367,6 @@ class MySolrDbCursor():
         solr_statement = "start=0&rows=9999&" + solr_statement
 
         # now we have to process our results
-
-
 
         self.last_result = solr_request(solr_host, solr_statement)
 
