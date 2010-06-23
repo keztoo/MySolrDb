@@ -1,27 +1,25 @@
-
 ##
 ## MySolrDb.py - plug-in replacement for MySqlDb
 ## python library to support SQL syntax using 
-## a solr index as the database.
+## a solr index as the database engine.
 ##
-## MIA
+## Currently MIA
 ## (1) drop database
 ## (2) drop table
-## (3) fetchone
-## (4) disconnect
-## (5) commit
-## (6) delete
+## (3) delete anything
 ##
-
 from MySolrDbParse import parseWhereClause
 from MySolrConnect import solr_request, solr_add, solr_commit
-
 
 class MySolrDb():
     def __init__(self, **kwargs):
         self.ignore_overwrite = kwargs.get('ignore_overwrite', False)       # do we check for doc presence before we overwrite
         self.auto_commit = kwargs.get('auto_commit', False)
+
+
+    def disconnect(self, **kwargs):
         pass
+
 
     def connect(self, **kwargs):
         self.ip_address = kwargs.get('ip_address','localhost')
@@ -29,8 +27,13 @@ class MySolrDb():
         # TODO: we should probably pull in all tables here and save them 
         return self
 
+
     def cursor(self, **kwargs):
         return MySolrDbCursor(ip_address=self.ip_address, port=self.port)
+
+
+    def commit(self):
+        res = solr_commit(self.ip_address + ":" + str(self.port))
 
 
 class MySolrDbCursor():
@@ -41,18 +44,23 @@ class MySolrDbCursor():
         self.last_result = None
         self.database_name = None
 
+
+    def fetchone(self):
+        if self.last_result is None:
+            return []
+        return self.last_result[0]
+
+
     def fetchall(self):
         return self.last_result
 
+
     def execute(self, statement):
-        # for now we only support 'select', 'insert', 'update', 
-        # 'delete', 'create database' and 'create table'
-        # will deal with joins later (maybe)
+        # we should really use a parser here but for now
+        # we will do it manually.
         if statement is None:
             return statement
 
-        # we should really use a parser here but for now
-        # we will do it manually.
         sa = statement.strip().split(" ")
 
         ##########################################
@@ -85,6 +93,21 @@ class MySolrDbCursor():
         elif sa[0].lower().strip() == 'delete':
             return self.processDelete(statement)
 
+        #######################################
+        ## process show statements here ...  ##
+        #######################################
+        elif sa[0].lower().strip() == 'show':
+            # for show we have database and tables ...
+            tmp = statement.split(" ")
+            if len(tmp) < 2:
+                raise Exception, 'Illegal statement!'
+            if tmp[1].lower().strip() == 'databases':
+                return self.showDatabases()
+            elif tmp[1].lower().strip() == 'tables':
+                return self.showTables(self.database_name, statement)
+            else:
+                raise Exception, 'Illegal statement!'
+            
         #########################################
         ## process create statements here ...  ##
         #########################################
@@ -111,7 +134,6 @@ class MySolrDbCursor():
 
     def handleWhereClause(self, database_name, table_name, where_clause):
         return parseWhereClause(database_name, table_name, where_clause)
-
 
 
     def processUse(self, statement):
@@ -370,9 +392,6 @@ class MySolrDbCursor():
         # so at this point result_set has a list of anchor roots which
         # meet our select criteria, here we go back and grab the fields
         # for each detail record. field_list should have the desired fields
-        # heres what we really need. fl=column_val_string and a query that looks like this ...
-        # q=(id:9 AND column_name:dbname_tablename_fieldname) OR (id:9 AND column_name:dbname_tablename_fieldname2)
-
 
         # for the select portion we knmow that ultimately
         # field names must be separated by a comma.
@@ -392,7 +411,7 @@ class MySolrDbCursor():
         fields_array = solr_field_list.split(",")
 
         # BUG - need to figure out what rows should be
-        solr_statement = "fl=column_val_string,column_name&start=0&rows=999&q="        
+        solr_statement = "fl=column_val_string,column_name,parent_id&start=0&rows=999&q="        
 
         for rs in result_set:
             if solr_field_list == "*":
@@ -402,15 +421,15 @@ class MySolrDbCursor():
                     solr_statement += "(parent_id:" + str(rs) +" AND column_name:" + field + ") OR "
 
         solr_statement = solr_statement[:-4]
+        #print "XXX", solr_statement
 
         # store result in last_result
-        print "XXX", solr_statement
-
         self.last_result = solr_request(solr_host, solr_statement)
 
         # this should come from the response i guess but which one?
-        solr_response = "200"
+        solr_response = "200"    # wtf?
         return solr_response
+
 
     def createDatabase(self, statement):
         # expect 'create database database_name"
@@ -432,6 +451,7 @@ class MySolrDbCursor():
 
 
     def getNextId(self):
+        # this needs to be addressed ASAP!!!!
         solr_str = "fl=id&q=id:[0 TO *]&sort=id desc&start=0&rows=1"
         last_id = solr_request("localhost:8983", solr_str)
         try:
@@ -445,14 +465,10 @@ class MySolrDbCursor():
     def createTable(self, database_name, statement):
         # supported format ...
         # CREATE TABLE test_table (id int, name VARCHAR(32), ssn VARCHAR(32));
-
         # note we have an issue to deal with here. if our table name is of the 
         # form x.table_name then we need to use the database name (x) from the 
         # create statement otherwise we fall back to our self.database_name
         # field and if both are None then we must throw an exception
-        # TODO: for now i hard code it to 'mydb'
-
-        #database_name = 'mydb'
 
         # first, extract table name
         tindx = statement.lower().find('table')
@@ -464,9 +480,8 @@ class MySolrDbCursor():
         if pindx == -1:
             raise Exception, 'Error ill formed statement'
 
-        #table_name = database_name + "_" + statement[tindx:pindx].strip()
-
         table_name = statement[tindx:pindx].strip()
+
         # next determine database name
         if table_name.find(".") > -1:
             # table name includes the database name
@@ -533,100 +548,45 @@ class MySolrDbCursor():
         return res
 
 
+    def showDatabases(self):
+        solr_str = "fl=id,database_name&q=database_name:[0 TO *]"
+        databases = solr_request("localhost:8983", solr_str)
+        print "Database on this instance --->", databases
+        return databases
 
-####################################################
-## eventually move this out to the unit test file ##
-####################################################
 
-db = MySolrDb()
-db.connect(ip_address='localhost', port=8983)
-## TODO: Waaa - I want db = MySolrDb.connect() like the big boys. sergey, where r u when i need u?
-cursor = db.cursor()
+    def showTables(self, database_name, statement):
+        # for right now just dumps current db's tables 
+        # eventually need to support 'show tables' or 
+        # 'show tables like' and maybe 'show tables database name'
+        databases = self.showDatabases()
 
-res = cursor.execute("create database mydb")
-res = cursor.execute("use mydb")
-create_table_statement = "CREATE TABLE test_table (id int, name VARCHAR(32), ssn VARCHAR(32))"
-res = cursor.execute(create_table_statement)
+        ##########################################
+        # for each database lets dump the tables #
+        # just like a show table command         #
+        ##########################################
+        for database in databases:
+            database_name = database['database_name']
+            database_name = database_name[0]
+            solr_str = "fl=id,table_name&q=table_name:" + database_name + "_*"
+            tables = solr_request("localhost:8983", solr_str)
+            print database_name, "tables --->", tables
+            for table in tables:
+                table_name = table['table_name']
+                table_name = table_name[0]
+                solr_str = "fl=id,meta_column_name,meta_column_type,meta_column_val_string,meta_column_val_int,meta_column_val_float,meta_column_val_timestamp&q=meta_column_name:" + table_name + "_*"
+                columns = solr_request("localhost:8983", solr_str)
+                for column in columns:
+                    column_name = column['meta_column_name']
+                    column_name = column_name[0]
+                    column_name = column_name.replace(table_name, "")
+                    column_name = column_name[1:]
 
-############################################
-# this is like a show databases command    #
-############################################
-solr_str = "fl=id,database_name&q=database_name:[0 TO *]"
-databases = solr_request("localhost:8983", solr_str)
-print "Database on this instance --->", databases
+                    column_type = column['meta_column_type']
+                    column_type = column_type[0]
 
-##########################################
-# for each database lets dump the tables #
-# just like a show table command         #
-##########################################
-for database in databases:
-    database_name = database['database_name']
-    database_name = database_name[0]
-    solr_str = "fl=id,table_name&q=table_name:" + database_name + "_*"
-    tables = solr_request("localhost:8983", solr_str)
-    print database_name, "tables --->", tables
-    for table in tables:
-        table_name = table['table_name']
-        table_name = table_name[0]
-        solr_str = "fl=id,meta_column_name,meta_column_type,meta_column_val_string,meta_column_val_int,meta_column_val_float,meta_column_val_timestamp&q=meta_column_name:" + table_name + "_*"
-        columns = solr_request("localhost:8983", solr_str)
-        for column in columns:
-            column_name = column['meta_column_name']
-            column_name = column_name[0]
-            column_name = column_name.replace(table_name, "")
-            column_name = column_name[1:]
+                    column_val_name = "meta_column_val_%s" % (column_type, )
+                    print table_name, column_type, "column --->", column_name, "default value --->", column[column_val_name]
 
-            column_type = column['meta_column_type']
-            column_type = column_type[0]
-
-            column_val_name = "meta_column_val_%s" % (column_type, )
-            print table_name, column_type, "column --->", column_name, "default value --->", column[column_val_name]
-
-# try various mysql like operations 
-res = cursor.execute("insert into mydb.test_table (name, ssn) values ('bla', '123-456-7890')")
-print "\nres from insert into mydb.test_table (name, ssn) values ('bla', '123-456-7890')", res    
-
-res = cursor.execute("insert into mydb.test_table (name, ssn) values ('ken smith', '000-00-0000')")
-print "\nres from insert into mydb.test_table (name, ssn) values ('ken smith', '000-00-0000')", res    
-
-res = cursor.execute("insert into mydb.test_table (name, ssn) values ('Joe Blow', '000-00-0000')")
-print "\nres from insert into mydb.test_table (name, ssn) values ('Joe Blow', '000-00-0000')", res    
-
-'''
-# this is like a select * from test_table
-solr_str = "fl=*&q=column_name:mydb_test_table_*"
-res = solr_request("localhost:8983", solr_str)
-print "res from select * done manually --->", res
-'''
-
-select_str = "select * from test_table where name = 'ken smith'" 
-print "tring select ...", select_str
-res = cursor.execute(select_str)
-print "res is --->", res
-res = cursor.fetchall()
-print "docs --->", res
-
-print "\n\n----------------------\n\n"
-
-select_str = "select * from test_table where name = 'ken smith' and ssn = '000-00-0000'" 
-print "select ...", select_str
-res = cursor.execute(select_str)
-print "res is --->", res
-res = cursor.fetchall()
-print "docs --->", res
-
-select_str = "select ssn from test_table where name = 'ken smith' and ssn = '000-00-0000'" 
-print "select ...", select_str
-res = cursor.execute(select_str)
-print "res is --->", res
-res = cursor.fetchall()
-print "docs --->", res
-
-select_str = "select name, ssn from test_table where name = 'ken smith' and ssn = '000-00-0000'" 
-print "select ...", select_str
-res = cursor.execute(select_str)
-print "res is --->", res
-res = cursor.fetchall()
-print "docs --->", res
 
 
