@@ -2,11 +2,6 @@
 There is currently no release. The first release will be 
 0.01a and the goals of the release are limited CRUD functionality. 
 
-As of 6/20/2010 the following exists ...
-
-(1) basic select support
-(2) basic update support (no array field support yet)
-
-I am hoping to get insert/delete done in the upcoming week. 
+ETA is July 2010
 
 

@@ -1,6 +1,6 @@
 README
 
-Last Updated: June 16th, 2010
+Last Updated: June 23rd, 2010
 By: kks
 
 
@@ -20,11 +20,12 @@ MySolrUnitTests.py - unit tests for the package
 
 Example Usage
 =============
+
 # Using MySqlDb, typical use cases might look like this ...
 import MySQLdb
 db = MySQLdb.connect(host='localhost', db='so1', user='root', passwd='w00t')
 cursor = db.cursor()
-sql = "insert into so1.session (session_id, user_name) values ('"+str(sid)+"', '"+str(user_name)+"')"
+sql = "insert into dbname.session (session_id, user_name) values ('"+str(sid)+"', '"+str(user_name)+"')"
 cursor.execute(sql)
 db.commit()
 
@@ -36,11 +37,12 @@ lesson_list = []
 for lesson in lessons:
     lesson_dict = {'lesson_id':lesson[0], 'lesson_name':lesson[1], 'lesson_description':lesson[2]}
 
+
 # AND using MySolrDb they look like this ...
-import MySolrDb
+from MySolrDb import MySolrDb
 db = MySolrDb.connect(host='localhost', db='so1', user='root', passwd='w00t')
 cursor = db.cursor()
-sql = "insert into so1.session (session_id, user_name) values ('"+str(sid)+"', '"+str(user_name)+"')"
+sql = "insert into dbname.session (session_id, user_name) values ('"+str(sid)+"', '"+str(user_name)+"')"
 cursor.execute(sql)
 db.commit()
 
@@ -53,16 +55,7 @@ for lesson in lessons:
     lesson_dict = {'lesson_id':lesson[0], 'lesson_name':lesson[1], 'lesson_description':lesson[2]}
 
 
-
-Typical SQL usage looks something like this ...
-SELECT * FROM tablex WHERE thing1 condition thing2 ORDER BY id desc
-
-Which in solor translates to this ...
-tablex_ip:port/fl=*&q=thing1:[0 TO *]&sort=id desc
-
-
-The Concept of a database is a document in the index which has a name, created 
-date, created by, etc field and an array field of table names.
+The Concept of a database is just another document in the index
 
 Tables likewise have the header fields and repeating fields of columns.
 
@@ -71,31 +64,13 @@ Tables likewise have the header fields and repeating fields of columns.
 (3) Create Table (addes table header fields to the index prefixed by database_name_table_name and adds table_name to database array fields of table names)
 (4) Delete Table (removes the doc's header fields and table name from database doc)
 
-Each time a new database is created we make a new entry in the master database 
-index. Now for each database thus created we need a table index which should have
-the following fields ....
 
-(a) ID
-(b) Table Name
-the following three fields repeat for each field.
-(c) Field Name
-(d) Field Type
-(e) Field Attributes
+Install  and Test Code
+======================
+Once you have checked out the code you will still need a solr index running somewhere in order to run the unit tests. 
 
-
-Basic SolrInstance Fields
-
-(1) DataBaseName = str()		(UNIQUE ID)
-(1.a) DataBaseCreatedDate		(Timestamp)
-(1.b) DataBaseCreatedBy			(UserName)
-(1.c) DataBaseTableName = str()		(ARRAY FIELD)
-
-(2) For Each Table ...
-(2.1) TableName				(UNIQUE ID)
-(2.2) TableCreatedDate			(Timestamp)
-(2.3) TableCreatedBy			(UserName)
-(2.3.1) TableFieldName			(ARRAY FIELD)
-(2.3.2) TableFieldType			(ARRAY FIELD)
-
+Assuming you have a solr index running on local host and you have (a) shut it down, (b) replaced the schema.xml file
+with the MySolrDb_schema.xml file, (c) rm -Rf index/solr/data and (d) restarted it you can then type 
+python MySolrDbUnitTests.py and the unit tests should run.
 
 
