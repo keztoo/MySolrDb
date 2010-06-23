@@ -1,35 +1,51 @@
+
+Introduction
+============
+The central design objective of this code is to be able to create databases and tables without stopping the index.
+This has a serious impact on the performance which one might argue is the sole purpose of denormalizing and 
+using a solr index. As a result, the best use of this code is as an introduction to solr and the solr way of
+dealing with data for a sql knowledgable individual. 
+
+While it may be argued there is benefit in simply providing a sql like 'select'interface to solr, to only provide
+this functionality would be less than the stated objectives of this project so it is not a concern for this code.
+
+This one single design decision has very far reaching ramifications. It requires a convoluted index structure
+and serious performance degredation. I do not know how useful this code will end up but I do know it was a 
+proof of concept I was after. Just to make sure one could provide a drop in replacement for MySQLdb. 
+
+I am in the process of forking this code to a new project called SolrSQL. This interface will not support 
+database or table level operations (create, rename, delete, etc) but will provide row level SQL support, so
+for example, CRUD operations at a row/column level are supported using standard SQL syntax. This code will
+probably become more popular than the code that forked it but this is often the case. 
+
+
+MySolrDb Schema Overview
+========================
 Here are our various docs ....
 
+<field name="id" type="integer" indexed="true" stored="true" required="true" /> 
 
-Here is how a database is represented 
-<id=unique across instance>
-<database_type={database}>
-<database_created_by=user_name>
-<database_date=timestamp>
-<database_table_name='some table name'> # note - array field
+<!-- these are the fields for a database record -->
+<field name="database_name" type="string" indexed="true" stored="true" multiValued="true" /> 
+
+<!-- Here is how a table is represented. note the actual name is databasename_tablename  -->
+<field name="table_name" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_name" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_type" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_val_int" type="integer" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_val_string" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_val_float" type="float" indexed="true" stored="true" multiValued="true" />
+<field name="meta_column_val_timestamp" type="date" indexed="true" stored="true" multiValued="true" />
+
+<!-- note column name is databasename_tablename_columnname -->
+<field name="row_anchor" type="integer" indexed="true" stored="true" /> 
+<field name="parent_id" type="integer" indexed="true" stored="true" /> 
+<field name="column_name" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="column_type" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="column_val_int" type="integer" indexed="true" stored="true" multiValued="true" />
+<field name="column_val_string" type="string" indexed="true" stored="true" multiValued="true" />
+<field name="column_val_float" type="float" indexed="true" stored="true" multiValued="true" />
+<field name="column_val_timestamp" type="date" indexed="true" stored="true" multiValued="true" />
 
 
-Here is how a table is represented 
-<id=unique across instance>
-<table_type={table}>
-<table_name=database_table_name>
-<table_created_by=user_name>
-<table_created_date=timestamp>
-
-
-Here is how a column is represented 
-<id=unique across instance>
-<column_type={column}>
-<column_name=database_name_table_name_table_name_column_name>
-# we have a field of each type statically 
-# defined with only 1 populated  for any column
-<column_type={string, int, float, timestamp}>
-<column_value_string=some_string_val>
-<column_value_int=some_int_val>
-<column_value_float=float_val>
-<column_value_timestamp=timestamp>
-
-Note - an auto inc field though supported is an expensive proposition ...
-Must first select the highest id and then add one to it. Only expensive
-on inserts actually. 
 
